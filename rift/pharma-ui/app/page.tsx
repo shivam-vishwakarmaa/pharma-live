@@ -371,63 +371,97 @@ export default function Home() {
     }
   }
 
-  async function handleAnalyze() {
-    setInputError("");
-    setApiError("");
+ async function handleAnalyze() {
+  setInputError("");
+  setApiError("");
 
-    // Accept manual comma-separated input even if user did not click "Add".
-    const pendingTokens = parseDrugTokens(drugInput);
-    let effectiveDrugs = [...selectedDrugs];
-    if (pendingTokens.length) {
-      if (multiMode) {
-        for (const token of pendingTokens) {
-          if (!effectiveDrugs.includes(token)) effectiveDrugs.push(token);
-        }
-      } else {
-        effectiveDrugs = [pendingTokens[0]];
+  const pendingTokens = parseDrugTokens(drugInput);
+  let effectiveDrugs = [...selectedDrugs];
+
+  if (pendingTokens.length) {
+    if (multiMode) {
+      for (const token of pendingTokens) {
+        if (!effectiveDrugs.includes(token)) effectiveDrugs.push(token);
       }
-      setSelectedDrugs(effectiveDrugs);
-      setDrugInput("");
+    } else {
+      effectiveDrugs = [pendingTokens[0]];
     }
-
-    if (!file) {
-      setFileError("Please upload a valid VCF file.");
-      return;
-    }
-    if (!effectiveDrugs.length) {
-      setInputError("Select at least one drug.");
-      return;
-    }
-
-    setLoading(true);
-    setLoadingStep(0);
-    setSingleResult(null);
-    setBatchResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("vcf", file);
-
-      if (!multiMode || effectiveDrugs.length === 1) {
-        formData.append("drug", effectiveDrugs[0]);
-        const res = await fetch("http://127.0.0.1:8000/analyze", { method: "POST", body: formData });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `Request failed (${res.status})`);
-        setSingleResult(data as SingleResult);
-      } else {
-        formData.append("drugs", effectiveDrugs.join(","));
-        const res = await fetch("http://127.0.0.1:8000/analyze/batch", { method: "POST", body: formData });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `Request failed (${res.status})`);
-        setBatchResult(data as BatchResult);
-      }
-    } catch (e) {
-      const raw = e instanceof Error ? e.message : "Unexpected API error.";
-      setApiError(toFriendlyApiError(raw));
-    } finally {
-      setLoading(false);
-    }
+    setSelectedDrugs(effectiveDrugs);
+    setDrugInput("");
   }
+
+  if (!file) {
+    setFileError("Please upload a valid VCF file.");
+    return;
+  }
+
+  if (!effectiveDrugs.length) {
+    setInputError("Select at least one drug.");
+    return;
+  }
+
+  setLoading(true);
+  setLoadingStep(0);
+  setSingleResult(null);
+  setBatchResult(null);
+
+  try {
+    const formData = new FormData();
+    formData.append("vcf", file);
+
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+    if (!BASE_URL) {
+      throw new Error("Backend URL not configured.");
+    }
+
+    if (!multiMode || effectiveDrugs.length === 1) {
+      formData.append("drug", effectiveDrugs[0]);
+
+      const res = await fetch(`${BASE_URL}/analyze`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : `Request failed (${res.status})`
+        );
+      }
+
+      setSingleResult(data as SingleResult);
+    } else {
+      formData.append("drugs", effectiveDrugs.join(","));
+
+      const res = await fetch(`${BASE_URL}/analyze/batch`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : `Request failed (${res.status})`
+        );
+      }
+
+      setBatchResult(data as BatchResult);
+    }
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : "Unexpected API error.";
+    setApiError(toFriendlyApiError(raw));
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   async function copyJson() {
     if (!rawJson) return;
